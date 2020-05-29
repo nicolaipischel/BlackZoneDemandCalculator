@@ -1,45 +1,45 @@
 // Fügt dem Menü des Speadsheet einen neuen Menüpunkt hinzu
 function AddSciptMenu() {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var menuEntries = [{ name: "Automatische Bedarfsberechnung", functionName: "autoMatBedarf" }];
+    let ss = SpreadsheetApp.getActiveSpreadsheet();
+    let menuEntries = [{ name: "Automatische Bedarfsberechnung", functionName: "autoMatBedarf" }];
     ss.addMenu("Funktionen", menuEntries);
 }
 
 
 // Automatische Berechnung des Materialbedarfs für die noch zu herstellenden Produkte
 function autoMatBedarf() {
-    var ss = SpreadsheetApp.getActiveSpreadsheet(); //Das aktive Dokument auswählen
-    var requests = ss.getSheetByName("Transport BZ");     //Das Sheet "Request" auswählen
-    var datas = ss.getSheetByName("Daten ProdKosten"); //Das Sheet "Daten Prodkosten" auswählen
-    var materials = ss.getSheetByName("Prodkosten");       //Das Sheet "ProdKosten" auswählen
-    var cellsreq = requests.getDataRange();               //Gibt den mit Daten befüllten Bereich zurück
-    var cellsdat = datas.getDataRange();                  //Gibt den mit Daten befüllten Bereich zurück
-    var cellsmat = materials.getDataRange();              //Gibt den mit Daten befüllten Bereich zurück
-    var rowreq = cellsreq.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
-    var rowdat = cellsdat.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
-    var rowmat = cellsmat.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
-    var columndat = cellsdat.getLastColumn();              //Gibt die letzte Spalte des ausgewählten Bereich zurück
-    var valuesreq = cellsreq.getValues();                  //Hole die Daten lokal als Array
-    var valuesdat = cellsdat.getValues();                  //Hole die Daten lokal als Array
+    let ss = SpreadsheetApp.getActiveSpreadsheet(); //Das aktive Dokument auswählen
+    let requests = ss.getSheetByName("Transport BZ");     //Das Sheet "Request" auswählen
+    let datas = ss.getSheetByName("Daten ProdKosten"); //Das Sheet "Daten Prodkosten" auswählen
+    let materials = ss.getSheetByName("Prodkosten");       //Das Sheet "ProdKosten" auswählen
+    let cellsreq = requests.getDataRange();               //Gibt den mit Daten befüllten Bereich zurück
+    let cellsdat = datas.getDataRange();                  //Gibt den mit Daten befüllten Bereich zurück
+    let cellsmat = materials.getDataRange();              //Gibt den mit Daten befüllten Bereich zurück
+    let rowreq = cellsreq.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
+    let rowdat = cellsdat.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
+    let rowmat = cellsmat.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
+    let columndat = cellsdat.getLastColumn();              //Gibt die letzte Spalte des ausgewählten Bereich zurück
+    let valuesreq = cellsreq.getValues();                  //Hole die Daten lokal als Array
+    let valuesdat = cellsdat.getValues();                  //Hole die Daten lokal als Array
 
     //if (materials.length > 0) {
     //Lösche alle Materialbedarfe
     materials.deleteRows("2", rowmat - 1);                 //Startposition, Anzahl folgender Zeilen
     //Hole die neuen Daten
     cellsmat = materials.getDataRange();              //Gibt den mit Daten befüllten Bereich zurück
-    var valuesmat = cellsmat.getValues();                  //Hole die Daten lokal als Array
+    let valuesmat = cellsmat.getValues();                  //Hole die Daten lokal als Array
     rowmat = cellsmat.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück          
     //}
 
     //Laufe über alle Bedarfszeilen
-    for (var i = 1; i < rowreq; i++) { //Index beginnt bei 1 => Kopfzeile
+    for (let i = 1; i < rowreq; i++) { //Index beginnt bei 1 => Kopfzeile
 
         //Wenn es Bedarf gibt berechne die Mats aus
         if (valuesreq[i][6] <= 0) {
             continue
         }
 
-        for (var j = 1; j < rowdat; j++) { //Index beginnt bei 1 => Kopfzeile
+        for (let j = 1; j < rowdat; j++) { //Index beginnt bei 1 => Kopfzeile
 
             //Richtige Datenzeile gelesen?
             if (valuesreq[i][0] != valuesdat[j][0]) {
@@ -57,7 +57,7 @@ function UpsertMaterial(valuesreq, valuesdat, valuesmat, rowmat, columndat, i, m
     let = currentrowmat = rowmat
 
     //Laufe über die einzelnen Materialien
-    for (var k = 1; k < columndat; k++) { //Index beginnt bei 1 => Bezeichnerspalte
+    for (let k = 1; k < columndat; k++) { //Index beginnt bei 1 => Bezeichnerspalte
 
         //Falls Materialbedarf größer null ist
         if (valuesdat[j][k] <= 0) {
@@ -84,7 +84,7 @@ function ExtractStep1(rowmat, i, j, k, valuesreq, valuesdat, valuesmat, found, m
     let currentRowMat = rowmat
     let currentFound = found
     // Existitiert bereits eine Zeile mit dem Material und dem Level?
-    for (var l = 1; l < currentRowMat; l++) {
+    for (let l = 1; l < currentRowMat; l++) {
         // Falls Material mit dem Level gefunden wurde, addiere die benötigte Menge hinzu
         if (valuesmat[l][0] != matname || valuesmat[l][1] != valuesreq[i][1]) {
             continue
@@ -110,7 +110,7 @@ function AddNewMaterialRow(currentRowMat, materials, valuesreq, valuedat, i, mat
     //Füge neue Zeile der aktuellen Arbeitstabelle hinzu
     FuegeNeueZeileHinzu(valuesmat, matname, valuesreq[i][1], calculatedResult)
 
-    currentRowMat++;
+    ++currentRowMat;
 
     setzeBedingteFormatierung(materials, valuesreq[i][1], currentRowMat)
     return currentRowMat
@@ -148,14 +148,14 @@ function setzeBedingteFormatierung(materials, value, currentRowMat) {
 
 // Fügt neuen Zeilen automatisch die Formeln in den gesperrten Spalten hinzu
 function autoAddFormel() {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();        //Das aktive Dokument auswählen
-    var requests = ss.getSheetByName("Transport BZ");     //Das Sheet "Request" auswählen
-    var cellsreq = requests.getDataRange();               //Gibt den mit Daten befüllten Bereich zurück
-    var rowreq = cellsreq.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
-    var valuesreq = cellsreq.getValues();                  //Hole die Daten lokal als Array
+    let ss = SpreadsheetApp.getActiveSpreadsheet();        //Das aktive Dokument auswählen
+    let requests = ss.getSheetByName("Transport BZ");     //Das Sheet "Request" auswählen
+    let cellsreq = requests.getDataRange();               //Gibt den mit Daten befüllten Bereich zurück
+    let rowreq = cellsreq.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
+    let valuesreq = cellsreq.getValues();                  //Hole die Daten lokal als Array
 
     //Laufe über alle Bedarfszeilenf
-    for (var i = 1; i < rowreq; i++) { //Index beginnt bei 1 => Kopfzeile
+    for (let i = 1; i < rowreq; i++) { //Index beginnt bei 1 => Kopfzeile
 
         //Holt sich den Zelleninhalt aus der Spalte E der aktuellen Zeile
         if (valuesreq[i][4] == "") {

@@ -1,157 +1,267 @@
-// Fügt dem Menü des Speadsheet einen neuen Menüpunkt hinzu
+
+/**
+ *  Fügt dem Menü des Speadsheet einen neuen Menüpunkt hinzu
+ */
 function AddSciptMenu() {
     let ss = SpreadsheetApp.getActiveSpreadsheet();
     let menuEntries = [{ name: "Automatische Bedarfsberechnung", functionName: "autoMatBedarf" }];
     ss.addMenu("Funktionen", menuEntries);
 }
 
+function getFilledCells(sheet) {
+    return sheet.getDataRange();
+}
 
-// Automatische Berechnung des Materialbedarfs für die noch zu herstellenden Produkte
+const FirstDataRowIndex = 1;
+const FirstDataColIndex = 1;
+const HeaderRowIndex = 0;
+const CardinalOffset = 1;
+const DemandedAmountColumnIndex = 6;
+const LevelColumnIndex = 1;
+
+/**
+ * Automatische Berechnung des Materialbedarfs für die noch zu herstellenden Produkte
+ */
 function autoMatBedarf() {
-    let ss = SpreadsheetApp.getActiveSpreadsheet(); //Das aktive Dokument auswählen
-    let requests = ss.getSheetByName("Transport BZ");     //Das Sheet "Request" auswählen
-    let datas = ss.getSheetByName("Daten ProdKosten"); //Das Sheet "Daten Prodkosten" auswählen
-    let materials = ss.getSheetByName("Prodkosten");       //Das Sheet "ProdKosten" auswählen
-    let cellsreq = requests.getDataRange();               //Gibt den mit Daten befüllten Bereich zurück
-    let cellsdat = datas.getDataRange();                  //Gibt den mit Daten befüllten Bereich zurück
-    let cellsmat = materials.getDataRange();              //Gibt den mit Daten befüllten Bereich zurück
-    let rowreq = cellsreq.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
-    let rowdat = cellsdat.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
-    let rowmat = cellsmat.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
-    let columndat = cellsdat.getLastColumn();              //Gibt die letzte Spalte des ausgewählten Bereich zurück
-    let valuesreq = cellsreq.getValues();                  //Hole die Daten lokal als Array
-    let valuesdat = cellsdat.getValues();                  //Hole die Daten lokal als Array
 
-    //if (materials.length > 0) {
-    //Lösche alle Materialbedarfe
-    materials.deleteRows("2", rowmat - 1);                 //Startposition, Anzahl folgender Zeilen
-    //Hole die neuen Daten
-    cellsmat = materials.getDataRange();              //Gibt den mit Daten befüllten Bereich zurück
-    let valuesmat = cellsmat.getValues();                  //Hole die Daten lokal als Array
-    rowmat = cellsmat.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück          
-    //}
+    let activeSheet = SpreadsheetApp.getActiveSpreadsheet();
+    let demandedGearSheet = activeSheet.getSheetByName("Transport BZ");
+    let productionCostSheet = activeSheet.getSheetByName("Daten ProdKosten");
+    let neededMaterialsSheet = activeSheet.getSheetByName("Prodkosten");
+    let lastMaterialRow = getFilledCells(neededMaterialsSheet).getLastRow();
+    let demandedGear = getFilledCells(demandedGearSheet).getValues();
+    let productionCosts = getFilledCells(productionCostSheet).getValues();
+
+    if (lastMaterialRow > FirstDataRowIndex) {
+        clearNeededMaterials(neededMaterialsSheet, lastMaterialRow);
+    }
+
+    let neededMaterialsCells = getFilledCells(neededMaterialsSheet);
+    let neededMaterials = neededMaterialsCells.getValues();
+    lastMaterialRow = neededMaterialsCells.getLastRow();
 
     //Laufe über alle Bedarfszeilen
-    for (let i = 1; i < rowreq; i++) { //Index beginnt bei 1 => Kopfzeile
+    for (let demandedGearRow = FirstDataRowIndex; demandedGearRow < demandedGear.length; demandedGearRow++) {
 
-        //Wenn es Bedarf gibt berechne die Mats aus
-        if (valuesreq[i][6] <= 0) {
-            continue
+        let demandedAmount = demandedGear[demandedGearRow][DemandedAmountColumnIndex];
+
+        if (isNotInDemand(demandedAmount)) {
+            continue;
         }
 
-        for (let j = 1; j < rowdat; j++) { //Index beginnt bei 1 => Kopfzeile
+        for (let productionCostRow = FirstDataRowIndex; productionCostRow < productionCosts.length; productionCostRow++) {
 
             //Richtige Datenzeile gelesen?
-            if (valuesreq[i][0] != valuesdat[j][0]) {
-                continue
+            if (demandedGear[demandedGearRow][0] != productionCosts[productionCostRow][0]) {
+                continue;
             }
 
             // //Laufe über die einzelnen Materialien
-            rowmat = UpsertMaterial(valuesreq, valuesdat, valuesmat, rowmat, columndat, i, materials, j)
+            lastMaterialRow = UpsertMaterial(
+                demandedGear,
+                productionCosts,
+                neededMaterials,
+                demandedGearRow,
+                neededMaterialsSheet,
+                productionCostRow)
         }
 
     }
 }
 
-function UpsertMaterial(valuesreq, valuesdat, valuesmat, rowmat, columndat, i, materials, j) {
-    let = currentrowmat = rowmat
+function clearNeededMaterials(neededMaterialsSheet, lastMaterialRow) {
+    const headerRowOffset = 1;
+    let startPos = FirstDataRowIndex + CardinalOffset;
+    let endPos = lastMaterialRow - headerRowOffset;
+
+    neededMaterialsSheet.deleteRows(startPos, endPos);
+}
+
+/**
+ * Prüft ob aktuell ein Bedarf für die Ausrüstungszeile besteht
+ * @param demandedAmount Angefuorderte Menge
+ * @return True wenn offener Bedarf existiert, sonst false
+ */
+function isNotInDemand(demandedAmount) {
+    return demandedAmount <= 0;
+}
+
+/**
+ * Updated oder Inserted eine Materialverbrauchszeile
+ */
+function UpsertMaterial(
+    demandedGear,
+    productionCosts,
+    neededMaterials,
+    demandedGearRow,
+    neededMaterialsSheet,
+    productionCostRow) {
+
+    let currentMaterialRow = neededMaterials.length;
 
     //Laufe über die einzelnen Materialien
-    for (let k = 1; k < columndat; k++) { //Index beginnt bei 1 => Bezeichnerspalte
+    for (let materialCol = FirstDataColIndex; materialCol < productionCosts[0].length; materialCol++) {
 
         //Falls Materialbedarf größer null ist
-        if (valuesdat[j][k] <= 0) {
-            continue
+        if (productionCosts[productionCostRow][materialCol] <= 0) {
+            continue;
         }
         //Lies den Materialnamen aus
-        let matname = valuesdat[0][k];
-        let found = 0.
+        let matname = productionCosts[0][materialCol];
 
-        found = ExtractStep1(currentrowmat, i, j, k, valuesreq, valuesdat, valuesmat, found, matname, materials)
+        let updated = UpdateMaterialRowIfExists(
+            demandedGearRow,
+            productionCostRow,
+            materialCol,
+            demandedGear,
+            productionCosts,
+            neededMaterials,
+            matname,
+            neededMaterialsSheet)
 
-        if (found != 0) {
-            continue
+        if (updated == true) {
+            continue;
         }
 
-        currentrowmat = AddNewMaterialRow(currentrowmat, materials, valuesreq, valuesdat[j][k], i, matname, valuesmat)
+        currentMaterialRow = AddNewMaterialRow(
+            currentMaterialRow,
+            neededMaterialsSheet,
+            demandedGear,
+            productionCosts[productionCostRow][materialCol],
+            demandedGearRow,
+            matname,
+            neededMaterials)
 
     }
 
-    return currentrowmat
+    return currentMaterialRow
 }
 
-function ExtractStep1(rowmat, i, j, k, valuesreq, valuesdat, valuesmat, found, matname, materials) {
-    let currentRowMat = rowmat
-    let currentFound = found
+/**
+ * 
+ */
+function UpdateMaterialRowIfExists(demandedGearRow, productionCostRow, materialCol, demandedGearData, productionCostData, neededMaterialsData, matname, neededMaterialsSheet) {
+    let updated = false;
+
+    const materialCountColumnIndex = 2;
     // Existitiert bereits eine Zeile mit dem Material und dem Level?
-    for (let l = 1; l < currentRowMat; l++) {
+    for (let neededMaterialRow = FirstDataRowIndex; neededMaterialRow < neededMaterialsData.length; neededMaterialRow++) {
         // Falls Material mit dem Level gefunden wurde, addiere die benötigte Menge hinzu
-        if (valuesmat[l][0] != matname || valuesmat[l][1] != valuesreq[i][1]) {
-            continue
+        if (isNotSameMaterial(neededMaterialsData, neededMaterialRow, matname, demandedGearData, demandedGearRow)) {
+            continue;
         }
+
+        let currentMaterialCellSelector = formatCellSelector("C", neededMaterialRow);
+        let currentNeededAmount = neededMaterialsData[neededMaterialRow][materialCountColumnIndex];
+        let newNeededAmount = calculateNeededAmount(demandedGearData[demandedGearRow][DemandedAmountColumnIndex], productionCostData[productionCostRow][materialCol]);
+        let sumerizedNeededAmount = currentNeededAmount + newNeededAmount;
+
         //Aktualisiere das Feld im Spreadsheet
-        materials.getRange("C" + (l + 1)).setValue(valuesmat[l][2] + (valuesreq[i][6] * valuesdat[j][k]));
+        neededMaterialsSheet.getRange(currentMaterialCellSelector).setValue(sumerizedNeededAmount);
         //Auch die aktuelle Arbeitstabelle aktualisieren
-        valuesmat[l][2] = valuesmat[l][2] + (valuesreq[i][6] * valuesdat[j][k]);
-        //Merke dass eine Zeile gefunden wurde
-        currentFound = 1;
+        neededMaterialsData[neededMaterialRow][materialCountColumnIndex] = sumerizedNeededAmount;
+
+        updated = true;
     }
 
-    return currentFound
+    return updated;
 }
 
-function AddNewMaterialRow(currentRowMat, materials, valuesreq, valuedat, i, matname, valuesmat) {
-    //let calculatedResult = calculateValue(valuesreq[i][6], valuesdat[j][k])
-    let calculatedResult = calculateValue(valuesreq[i][6], valuedat)
-
-    //Befülle Spreadsheetzeile
-    BefuelleSpreadsheetzeile(materials, currentRowMat, matname, valuesreq[i][1], i, calculatedResult);
-
-    //Füge neue Zeile der aktuellen Arbeitstabelle hinzu
-    FuegeNeueZeileHinzu(valuesmat, matname, valuesreq[i][1], calculatedResult)
-
-    ++currentRowMat;
-
-    setzeBedingteFormatierung(materials, valuesreq[i][1], currentRowMat)
-    return currentRowMat
+/**
+ * 
+ */
+function formatCellSelector(columnName, rowIndex) {
+    return `${columnName}${rowIndex + CardinalOffset}`;
 }
 
+/**
+ * 
+ */
+function isNotSameMaterial(neededMaterials, neededMaterialRow, matname, demandedGear, demandedGearRow) {
+    const identifierColumnIndex = 0;
 
+    return neededMaterials[neededMaterialRow][identifierColumnIndex] != matname
+        || neededMaterials[neededMaterialRow][LevelColumnIndex] != demandedGear[demandedGearRow][LevelColumnIndex];
+}
 
-function FuegeNeueZeileHinzu(valuesmat, matname, valuereq, calculatedResult) {
+/**
+ * @param currentRowMat Aktuelle Zeilenanzahl der Materialliste
+ * @param neededMaterialsSheet Tabellenblatt mit den vorhandenen Materialbedarf
+ */
+function AddNewMaterialRow(
+    currentRowMat,
+    neededMaterialsSheet,
+    valuesreq,
+    valuedat,
+    demandedGearRow,
+    matname,
+    valuesmat) {
+
+    let neededAmount = calculateNeededAmount(valuesreq[demandedGearRow][DemandedAmountColumnIndex], valuedat);
+
+    fillRow(neededMaterialsSheet, currentRowMat, matname, valuesreq[demandedGearRow][LevelColumnIndex], demandedGearRow, neededAmount);
+
+    insertNewRow(valuesmat, matname, valuesreq[demandedGearRow][LevelColumnIndex], neededAmount);
+
+    setConditionalFormat(neededMaterialsSheet, valuesreq[demandedGearRow][LevelColumnIndex], currentRowMat);
+
+    return ++currentRowMat;
+}
+
+/**
+ * 
+ */
+function insertNewRow(valuesmat, matname, valuereq, calculatedResult) {
     valuesmat.push([matname, valuereq, calculatedResult]);
 }
-function BefuelleSpreadsheetzeile(materials, currentRowMat, matname, valuereq, i, calculatedResult) {
-    materials.getRange("A" + (currentRowMat + 1)).setValue(matname);
-    materials.getRange("B" + (currentRowMat + 1)).setValue(valuereq);
-    materials.getRange("C" + (currentRowMat + 1)).setValue(calculatedResult);
+
+/**
+ * 
+ */
+function fillRow(neededMaterialsSheet, currentRowMat, matname, valuereq, i, calculatedResult) {
+    let nameCell = formatCellSelector("A", currentRowMat);
+    let levelCell = formatCellSelector("B", currentRowMat);
+    let neededAmountCell = formatCellSelector("C", currentRowMat);
+
+    neededMaterialsSheet.getRange(nameCell).setValue(matname);
+    neededMaterialsSheet.getRange(levelCell).setValue(valuereq);
+    neededMaterialsSheet.getRange(neededAmountCell).setValue(calculatedResult);
 }
 
-function calculateValue(value1, value2) {
-    return value1 * value2
+function calculateNeededAmount(value1, value2) {
+    return value1 * value2;
 }
 
-function setzeBedingteFormatierung(materials, value, currentRowMat) {
+/**
+ * 
+ */
+function setConditionalFormat(neededMaterialsSheet, materialLevel, currentRowMat) {
     // Färbe die Zeile mit dem Level ein
-    switch (Math.trunc(value)) {
+
+    let currentRowCells = formatCellSelector("A", currentRowMat) + formatCellSelector(":C", currentRowMat);
+
+    switch (Math.trunc(materialLevel)) {
         case 4:
-            materials.getRange("A" + currentRowMat + ":C" + currentRowMat).setBackground("lightblue");
+            neededMaterialsSheet.getRange(currentRowCells).setBackground("lightblue");
             break;
         case 5:
-            materials.getRange("A" + currentRowMat + ":C" + currentRowMat).setBackground("tomato");
+            neededMaterialsSheet.getRange(currentRowCells).setBackground("tomato");
             break;
         case 6:
-            materials.getRange("A" + currentRowMat + ":C" + currentRowMat).setBackground("orange");
+            neededMaterialsSheet.getRange(currentRowCells).setBackground("orange");
             break;
     }
 }
 
-// Fügt neuen Zeilen automatisch die Formeln in den gesperrten Spalten hinzu
+/**
+ * Fügt neuen Zeilen automatisch die Formeln in den gesperrten Spalten hinzu
+ */
 function autoAddFormel() {
-    let ss = SpreadsheetApp.getActiveSpreadsheet();        //Das aktive Dokument auswählen
-    let requests = ss.getSheetByName("Transport BZ");     //Das Sheet "Request" auswählen
-    let cellsreq = requests.getDataRange();               //Gibt den mit Daten befüllten Bereich zurück
-    let rowreq = cellsreq.getLastRow();                 //Gibt die letzte Zeile des augewählten Bereich zurück
+    // Das aktive Dokument auswählen.
+    let ss = SpreadsheetApp.getActiveSpreadsheet();
+    let requests = ss.getSheetByName("Transport BZ");      //Das Sheet "Request" auswählen
+    let cellsreq = requests.getDataRange();                //Gibt den mit Daten befüllten Bereich zurück
+    let rowreq = cellsreq.getLastRow();                    //Gibt die letzte Zeile des augewählten Bereich zurück
     let valuesreq = cellsreq.getValues();                  //Hole die Daten lokal als Array
 
     //Laufe über alle Bedarfszeilenf

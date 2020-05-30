@@ -1,4 +1,3 @@
-
 /**
  *  Fügt dem Menü des Speadsheet einen neuen Menüpunkt hinzu
  */
@@ -8,16 +7,13 @@ function AddSciptMenu() {
     ss.addMenu("Funktionen", menuEntries);
 }
 
-function getFilledCells(sheet) {
-    return sheet.getDataRange();
-}
-
 const FirstDataRowIndex = 1;
 const FirstDataColIndex = 1;
 const HeaderRowIndex = 0;
 const CardinalOffset = 1;
 const DemandedAmountColumnIndex = 6;
 const LevelColumnIndex = 1;
+const IdentifierColumnIndex = 0;
 
 /**
  * Automatische Berechnung des Materialbedarfs für die noch zu herstellenden Produkte
@@ -69,6 +65,15 @@ function autoMatBedarf() {
     }
 }
 
+/**
+ * Gibt den mit Daten befüllten Zellenbereich eines Tabellenblatts zurück
+ * @param {Object} sheet Ein Tabellenblatt der Klasse Sheet
+ * @returns {Range} Eine Zellenbreich der Klasse Range
+ */
+function getFilledCells(sheet) {
+    return sheet.getDataRange();
+}
+
 function clearNeededMaterials(neededMaterialsSheet, lastMaterialRow) {
     const headerRowOffset = 1;
     let startPos = FirstDataRowIndex + CardinalOffset;
@@ -79,8 +84,8 @@ function clearNeededMaterials(neededMaterialsSheet, lastMaterialRow) {
 
 /**
  * Prüft ob aktuell ein Bedarf für die Ausrüstungszeile besteht
- * @param demandedAmount Angefuorderte Menge
- * @return True wenn offener Bedarf existiert, sonst false
+ * @param {number} demandedAmount Angeforderte Menge
+ * @return {boolean} True wenn offener Bedarf existiert, sonst false
  */
 function isNotInDemand(demandedAmount) {
     return demandedAmount <= 0;
@@ -103,11 +108,11 @@ function UpsertMaterial(
     for (let materialCol = FirstDataColIndex; materialCol < productionCosts[0].length; materialCol++) {
 
         //Falls Materialbedarf größer null ist
-        if (productionCosts[productionCostRow][materialCol] <= 0) {
+        if (isNotInDemand(productionCosts[productionCostRow][materialCol])) {
             continue;
         }
         //Lies den Materialnamen aus
-        let matname = productionCosts[0][materialCol];
+        let matName = productionCosts[HeaderRowIndex][materialCol];
 
         let updated = UpdateMaterialRowIfExists(
             demandedGearRow,
@@ -116,7 +121,7 @@ function UpsertMaterial(
             demandedGear,
             productionCosts,
             neededMaterials,
-            matname,
+            matName,
             neededMaterialsSheet)
 
         if (updated == true) {
@@ -129,7 +134,7 @@ function UpsertMaterial(
             demandedGear,
             productionCosts[productionCostRow][materialCol],
             demandedGearRow,
-            matname,
+            matName,
             neededMaterials)
 
     }
@@ -178,9 +183,8 @@ function formatCellSelector(columnName, rowIndex) {
  * 
  */
 function isNotSameMaterial(neededMaterials, neededMaterialRow, matname, demandedGear, demandedGearRow) {
-    const identifierColumnIndex = 0;
-
-    return neededMaterials[neededMaterialRow][identifierColumnIndex] != matname
+    
+    return neededMaterials[neededMaterialRow][IdentifierColumnIndex] != matname
         || neededMaterials[neededMaterialRow][LevelColumnIndex] != demandedGear[demandedGearRow][LevelColumnIndex];
 }
 
@@ -191,19 +195,21 @@ function isNotSameMaterial(neededMaterials, neededMaterialRow, matname, demanded
 function AddNewMaterialRow(
     currentRowMat,
     neededMaterialsSheet,
-    valuesreq,
+    demandedGear,
     valuedat,
     demandedGearRow,
-    matname,
-    valuesmat) {
+    materialName,
+    neededMaterials) {
 
-    let neededAmount = calculateNeededAmount(valuesreq[demandedGearRow][DemandedAmountColumnIndex], valuedat);
+    const lastDataColumnIndex = 2;
+    let neededAmount = calculateNeededAmount(demandedGear[demandedGearRow][DemandedAmountColumnIndex], valuedat);
+    let materialLevel = demandedGear[demandedGearRow][LevelColumnIndex];
 
-    fillRow(neededMaterialsSheet, currentRowMat, matname, valuesreq[demandedGearRow][LevelColumnIndex], demandedGearRow, neededAmount);
+    fillRow(neededMaterialsSheet, currentRowMat, materialName, materialLevel, neededAmount);
 
-    insertNewRow(valuesmat, matname, valuesreq[demandedGearRow][LevelColumnIndex], neededAmount);
+    insertNewRow(neededMaterials, materialName, materialLevel, neededAmount);
 
-    setConditionalFormat(neededMaterialsSheet, valuesreq[demandedGearRow][LevelColumnIndex], currentRowMat);
+    setConditionalFormat(neededMaterialsSheet, materialLevel, currentRowMat, lastDataColumnIndex);
 
     return ++currentRowMat;
 }
@@ -211,20 +217,20 @@ function AddNewMaterialRow(
 /**
  * 
  */
-function insertNewRow(valuesmat, matname, valuereq, calculatedResult) {
-    valuesmat.push([matname, valuereq, calculatedResult]);
+function insertNewRow(neededMaterials, materialName, materialLevel, calculatedResult) {
+    neededMaterials.push([materialName, materialLevel, calculatedResult]);
 }
 
 /**
  * 
  */
-function fillRow(neededMaterialsSheet, currentRowMat, matname, valuereq, i, calculatedResult) {
+function fillRow(neededMaterialsSheet, currentRowMat, materialName, materialLevel, calculatedResult) {
     let nameCell = formatCellSelector("A", currentRowMat);
     let levelCell = formatCellSelector("B", currentRowMat);
     let neededAmountCell = formatCellSelector("C", currentRowMat);
 
-    neededMaterialsSheet.getRange(nameCell).setValue(matname);
-    neededMaterialsSheet.getRange(levelCell).setValue(valuereq);
+    neededMaterialsSheet.getRange(nameCell).setValue(materialName);
+    neededMaterialsSheet.getRange(levelCell).setValue(materialLevel);
     neededMaterialsSheet.getRange(neededAmountCell).setValue(calculatedResult);
 }
 
@@ -233,22 +239,24 @@ function calculateNeededAmount(value1, value2) {
 }
 
 /**
- * 
+ * Färbe die Zeile mit dem Level ein
  */
-function setConditionalFormat(neededMaterialsSheet, materialLevel, currentRowMat) {
-    // Färbe die Zeile mit dem Level ein
-
-    let currentRowCells = formatCellSelector("A", currentRowMat) + formatCellSelector(":C", currentRowMat);
+function setConditionalFormat(sheet, materialLevel, currentRow, lastColumn) {
+    let IdentifierColumnIndexSheet = IdentifierColumnIndex + CardinalOffset;
+    let currentRowSheet = currentRow + CardinalOffset;
+    let lastColumnSheet = lastColumn + CardinalOffset;
+    
+    let currentRowRange = sheet.getRange(currentRowSheet, IdentifierColumnIndexSheet, 1, lastColumnSheet);
 
     switch (Math.trunc(materialLevel)) {
         case 4:
-            neededMaterialsSheet.getRange(currentRowCells).setBackground("lightblue");
+            currentRowRange.setBackground("lightblue");
             break;
         case 5:
-            neededMaterialsSheet.getRange(currentRowCells).setBackground("tomato");
+            currentRowRange.setBackground("tomato");
             break;
         case 6:
-            neededMaterialsSheet.getRange(currentRowCells).setBackground("orange");
+            currentRowRange.setBackground("orange");
             break;
     }
 }
@@ -259,35 +267,23 @@ function setConditionalFormat(neededMaterialsSheet, materialLevel, currentRowMat
 function autoAddFormel() {
     // Das aktive Dokument auswählen.
     let ss = SpreadsheetApp.getActiveSpreadsheet();
-    let requests = ss.getSheetByName("Transport BZ");      //Das Sheet "Request" auswählen
-    let cellsreq = requests.getDataRange();                //Gibt den mit Daten befüllten Bereich zurück
+    let demandedGearSheet = ss.getSheetByName("Transport BZ");      //Das Sheet "Request" auswählen
+    let cellsreq = demandedGearSheet.getDataRange();                //Gibt den mit Daten befüllten Bereich zurück
     let rowreq = cellsreq.getLastRow();                    //Gibt die letzte Zeile des augewählten Bereich zurück
     let valuesreq = cellsreq.getValues();                  //Hole die Daten lokal als Array
+    const lastDataColumnIndex = 6;
 
     //Laufe über alle Bedarfszeilenf
     for (let i = 1; i < rowreq; i++) { //Index beginnt bei 1 => Kopfzeile
 
         //Holt sich den Zelleninhalt aus der Spalte E der aktuellen Zeile
         if (valuesreq[i][4] == "") {
-            requests.getRange("E" + (i + 1)).setFormula('=C' + (i + 1) + '-D' + (i + 1));
-            requests.getRange("G" + (i + 1)).setFormula('=E' + (i + 1) + '-F' + (i + 1));
+            demandedGearSheet.getRange(formatCellSelector("E", i)).setFormula('=' + formatCellSelector('C', i) + '-' + formatCellSelector('D', i));
+            demandedGearSheet.getRange(formatCellSelector("G", i)).setFormula('=' + formatCellSelector('E', i) + '-' + formatCellSelector('F', i));
         }
 
-        // Färbe die Zeile mit dem Level ein
-        switch (Math.trunc(valuesreq[i][1])) {
-            case 4:
-                requests.getRange("A" + (i + 1) + ":G" + (i + 1)).setBackground("lightblue");
-                break;
-            case 5:
-                requests.getRange("A" + (i + 1) + ":G" + (i + 1)).setBackground("tomato");
-                break;
-            case 6:
-                requests.getRange("A" + (i + 1) + ":G" + (i + 1)).setBackground("orange");
-                break;
-            default:
-                requests.getRange("A" + (i + 1) + ":G" + (i + 1)).setBackground("white");
-                break;
-        }
+        setConditionalFormat(demandedGearSheet, valuesreq[i][LevelColumnIndex], i, lastDataColumnIndex);
 
     }
 }
+
